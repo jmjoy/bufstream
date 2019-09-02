@@ -18,6 +18,11 @@ version = "0.1.13"
 optional = true
 version = "0.1.1"
 
+[dependencies.async-std]
+optional = true
+version = "0.99"
+
 [features]
 default = []
 tokio = ["futures", "tokio-io"]
+async_std = ["async-std"]

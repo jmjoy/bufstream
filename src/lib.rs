@@ -61,13 +61,17 @@
 #[cfg(feature = "tokio")] extern crate futures;
 #[cfg(feature = "tokio")] #[macro_use] extern crate tokio_io;
 
+#[cfg(feature = "async_std")] extern crate async_std;
+
 use std::fmt;
-use std::io::prelude::*;
-use std::io::{self, BufReader, BufWriter, Seek, SeekFrom};
+#[cfg(not(feature = "async_std"))] use std::io::prelude::*;
+#[cfg(not(feature = "async_std"))] use std::io::{self, BufReader, BufWriter, Seek, SeekFrom};
 use std::error;
 
 #[cfg(feature = "tokio")] use futures::{Async, Poll};
 #[cfg(feature = "tokio")] use tokio_io::{AsyncRead, AsyncWrite};
+
+#[cfg(feature = "async_std")] use async_std::io::{self, Read, BufRead, Write, BufReader, Seek, SeekFrom};
 
 const DEFAULT_BUF_SIZE: usize = 8 * 1024;
 
@@ -118,14 +122,29 @@ impl<W> fmt::Display for IntoInnerError<W> {
     }
 }
 
+#[cfg(not(feature = "async_std"))]
 struct InternalBufWriter<W: Write>(Option<BufWriter<W>>);
+#[cfg(feature = "async_std")]
+struct InternalBufWriter<W: Write>(Option<W>);
 
 impl<W: Write> InternalBufWriter<W> {
+    #[cfg(not(feature = "async_std"))]
     fn get_ref(&self) -> &BufWriter<W> {
         self.0.as_ref().unwrap()
     }
 
+    #[cfg(feature = "async_std")]
+    fn get_ref(&self) -> &W {
+        self.0.as_ref().unwrap()
+    }
+
+    #[cfg(not(feature = "async_std"))]
     fn get_mut(&mut self) -> &mut BufWriter<W> {
+        self.0.as_mut().unwrap()
+    }
+
+    #[cfg(feature = "async_std")]
+    fn get_mut(&mut self) -> &mut W {
         self.0.as_mut().unwrap()
     }
 }
@@ -153,7 +172,11 @@ impl<S: Read + Write> BufStream<S> {
     /// reader/writer buffer.
     pub fn with_capacities(reader_cap: usize, writer_cap: usize, inner: S)
                            -> BufStream<S> {
-        let writer = BufWriter::with_capacity(writer_cap, inner);
+
+        // TODO Here `async-std` crate not provide BufWriter yet.
+        #[cfg(feature = "async_std")] let writer = inner;
+        #[cfg(not(feature = "async_std"))] let writer = BufWriter::with_capacity(writer_cap, inner);
+
         let internal_writer = InternalBufWriter(Some(writer));
         let reader = BufReader::with_capacity(reader_cap, internal_writer);
         BufStream { inner: reader }
@@ -202,11 +225,15 @@ impl<S: Read + Write> BufStream<S> {
 }
 
 impl<S: Read + Write> BufRead for BufStream<S> {
+    #[cfg(not(feature = "async_std"))]
     fn fill_buf(&mut self) -> io::Result<&[u8]> { self.inner.fill_buf() }
+    #[cfg(not(feature = "async_std"))]
     fn consume(&mut self, amt: usize) { self.inner.consume(amt) }
+    #[cfg(not(feature = "async_std"))]
     fn read_until(&mut self, byte: u8, buf: &mut Vec<u8>) -> io::Result<usize> {
         self.inner.read_until(byte, buf)
     }
+    #[cfg(not(feature = "async_std"))]
     fn read_line(&mut self, string: &mut String) -> io::Result<usize> {
         self.inner.read_line(string)
     }

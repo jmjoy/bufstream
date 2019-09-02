@@ -17,6 +17,7 @@ script:
   - cargo build --verbose
   - cargo test --verbose
   - cargo test --verbose --features tokio
+  - cargo test --verbose --features async_std
 
 notifications:
   email:
